@@ -1,0 +1,19 @@
+# Dépendances Python pour le parcours stagiaire — versions stables vérifiées sur PyPI (mai 2026).
+# Installer : pip install -r requirements.txt
+
+# --- Authentification Azure ---
+azure-identity>=1.25.3,<2.0
+
+# --- Microsoft Foundry ---
+# Plan management (créer / gérer ressources & projets)
+azure-mgmt-cognitiveservices>=14.1.0,<15.0
+# Plan data (utiliser un projet : agents, datasets, évaluations…)
+azure-ai-projects>=2.1.0,<3.0
+azure-ai-agents>=1.1.0,<2.0
+
+# --- Observabilité ---
+# Tracing OpenTelemetry vers Application Insights
+azure-monitor-opentelemetry>=1.8.8,<2.0
+
+# --- Notebooks ---
+ipykernel>=6.29.5
