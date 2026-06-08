@@ -1,0 +1,52 @@
+[project]
+name = "mailroom-worker"
+version = "0.1.0"
+description = "Worker d'ingestion et classification des courriers scannés"
+requires-python = ">=3.13"
+dependencies = [
+    "aiohttp>=3.11.0",
+    "azure-identity>=1.25.3",
+    "azure-storage-blob>=12.27.0",
+    "azure-storage-queue>=12.13.0",
+    "azure-cosmos>=4.10.0",
+    "azure-ai-documentintelligence>=1.0.2",
+    "azure-ai-projects>=2.1.0",
+    "azure-monitor-opentelemetry>=1.8.8",
+    "openai>=1.95.0",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.7.0",
+    "structlog>=25.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.9.0",
+    "mypy>=1.14.0",
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.25.0",
+    "pytest-cov>=6.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["worker"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "N", "SIM", "RUF"]
+
+[tool.mypy]
+strict = true
+python_version = "3.13"
+warn_return_any = true
+warn_unused_ignores = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

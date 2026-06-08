@@ -222,6 +222,16 @@ Si toutes ces commandes répondent correctement, **vous êtes prêt·e**. 🎉
 | 04 | [notebooks/04-architecture-web.ipynb](notebooks/04-architecture-web.ipynb) | Architecture web : client/serveur, **API REST/GraphQL/gRPC/WebSocket**, SPA/SSR/static, monolithe/microservices/serverless, CDN, load balancer, BFF |
 | 05 | [notebooks/05-securite-cloud.ipynb](notebooks/05-securite-cloud.ipynb) | Sécurité cloud (survol) : **Entra ID**, **RBAC**, **Managed Identity**, **Key Vault**, réseau, Defender for Cloud, sécurité spécifique IA |
 | 06 | [notebooks/06-monitoring-et-evaluation.ipynb](notebooks/06-monitoring-et-evaluation.ipynb) | Application Insights, OpenTelemetry, KQL, tracing des agents et **évaluation** (à compléter) |
+| 07 | [notebooks/07-docker-container-apps.ipynb](notebooks/07-docker-container-apps.ipynb) | Docker, containers, registries (ACR), **Azure Container Apps** (Apps & Jobs, KEDA) |
+| 08 | [notebooks/08-bicep-iac.ipynb](notebooks/08-bicep-iac.ipynb) | **Bicep & Infrastructure as Code** : concepts, exemples, déploiement d'une ressource + **cleanup final du parcours** |
+
+---
+
+## 🎯 Après la formation — le projet `mailroom-ia`
+
+Une fois les notebooks 01-07 complétés, direction `projet/mailroom-ia/` :
+1. Lire [SPEC.md](projet/mailroom-ia/SPEC.md) et [DESIGN.md](projet/mailroom-ia/DESIGN.md)
+2. Dérouler [setup.ipynb](projet/mailroom-ia/setup.ipynb) qui provisionne tout en 2 passes Bicep + build images + déploiement ACA
 
 ---
 

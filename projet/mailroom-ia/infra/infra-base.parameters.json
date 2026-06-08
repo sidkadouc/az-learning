@@ -1,0 +1,9 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "userId": { "value": "<remplacez-par-votre-identifiant>" },
+    "foundryModelDeployment": { "value": "gpt-5-mini" },
+    "foundryModelVersion": { "value": "2025-08-07" }
+  }
+}
