@@ -26,6 +26,17 @@ param workerImageTag string = 'v1'
 @description('Nom du déploiement modèle Foundry (doit matcher infra-base).')
 param foundryModelDeployment string = 'gpt-5-mini'
 
+// --- Easy Auth (Entra ID) sur le web app ---
+@description('Client ID de l app registration Entra ID pour Easy Auth. Vide = pas d auth.')
+param easyAuthClientId string = ''
+
+@description('Tenant ID Entra ID autorisé (issuer). Tous les users de ce tenant pourront se connecter.')
+param easyAuthTenantId string = ''
+
+@secure()
+@description('Client secret de l app registration Entra ID. Requis si easyAuthClientId est renseigné.')
+param easyAuthClientSecret string = ''
+
 param tags object = {
   project: 'mailroom-ia'
   managedBy: 'bicep'
@@ -241,6 +252,12 @@ resource web 'Microsoft.App/containerApps@2024-10-02-preview' = {
         }
       ]
       activeRevisionsMode: 'Single'
+      secrets: easyAuthClientId != '' ? [
+        {
+          name: 'microsoft-provider-authentication-secret'
+          value: easyAuthClientSecret
+        }
+      ] : []
     }
     template: {
       containers: [
@@ -264,6 +281,39 @@ resource web 'Microsoft.App/containerApps@2024-10-02-preview' = {
         }
       ]
       scale: { minReplicas: 1, maxReplicas: 3 }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------
+// Easy Auth : Entra ID (optionnel, activé si easyAuthClientId != '')
+// Tous les utilisateurs du tenant easyAuthTenantId peuvent se connecter.
+// Les requêtes non authentifiées sont redirigées vers la page de login.
+// ---------------------------------------------------------------------
+resource webAuth 'Microsoft.App/containerApps/authConfigs@2024-10-02-preview' = if (easyAuthClientId != '') {
+  parent: web
+  name: 'current'
+  properties: {
+    platform: {
+      enabled: true
+    }
+    globalValidation: {
+      unauthenticatedClientAction: 'RedirectToLoginPage'
+    }
+    identityProviders: {
+      azureActiveDirectory: {
+        registration: {
+          clientId: easyAuthClientId
+          clientSecretSettingName: 'microsoft-provider-authentication-secret'
+          openIdIssuer: 'https://login.microsoftonline.com/${easyAuthTenantId}/v2.0'
+        }
+        validation: {
+          allowedAudiences: [
+            'api://${easyAuthClientId}'
+            easyAuthClientId
+          ]
+        }
+      }
     }
   }
 }

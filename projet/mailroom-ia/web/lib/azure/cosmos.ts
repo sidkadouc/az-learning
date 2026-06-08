@@ -58,7 +58,7 @@ export async function deleteDocument(id: string, partitionKey: string): Promise<
 export async function listClients(limit = 200): Promise<ClientRecord[]> {
   const { resources } = await clients()
     .items.query<ClientRecord>({
-      query: "SELECT TOP @limit * FROM c ORDER BY c.displayName",
+      query: "SELECT TOP @limit c.id, c.displayName, c.email, c.entraExternalId, c.createdAt, c.createdBy FROM c ORDER BY c.displayName",
       parameters: [{ name: "@limit", value: limit }],
     })
     .fetchAll();

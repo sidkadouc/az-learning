@@ -10,6 +10,7 @@ export interface ClassificationResult {
   confidence: number;
   needsReview: boolean;
   reasoning?: string;
+  detectedRecipientName?: string | null;
   diUsed?: string[];
   totalCostEur?: number;
 }

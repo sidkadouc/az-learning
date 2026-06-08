@@ -24,6 +24,50 @@ export async function uploadInboxBlob(
   });
 }
 
+export interface BrowseEntry {
+  type: "folder" | "blob";
+  name: string;            // dernier segment (sans le préfixe)
+  fullPath: string;        // chemin complet dans le container (= blob name pour les blobs, préfixe avec / final pour les folders)
+  size?: number;
+  modified?: string;
+  contentType?: string;
+}
+
+/**
+ * Liste UN niveau de l'arborescence du container à partir d'un préfixe donné.
+ * Utilise listBlobsByHierarchy avec le délimiteur "/" → renvoie folders + blobs.
+ * Ex: prefix="clients/client42/" renvoie ["factures/", "contrats/", ...] (folders)
+ * et les blobs directement à ce niveau.
+ */
+export async function listBlobLevel(prefix: string): Promise<BrowseEntry[]> {
+  const cli = container();
+  const entries: BrowseEntry[] = [];
+  for await (const item of cli.listBlobsByHierarchy("/", { prefix })) {
+    if (item.kind === "prefix") {
+      const full = item.name; // ex: "clients/client42/factures/"
+      const trimmed = full.endsWith("/") ? full.slice(0, -1) : full;
+      const last = trimmed.slice(prefix.length);
+      entries.push({ type: "folder", name: last, fullPath: full });
+    } else {
+      const full = item.name;
+      const last = full.slice(prefix.length);
+      entries.push({
+        type: "blob",
+        name: last,
+        fullPath: full,
+        size: item.properties.contentLength ?? 0,
+        modified: item.properties.lastModified?.toISOString(),
+        contentType: item.properties.contentType ?? undefined,
+      });
+    }
+  }
+  entries.sort((a, b) => {
+    if (a.type !== b.type) return a.type === "folder" ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
+  return entries;
+}
+
 /**
  * Renvoie une arborescence textuelle façon `tree` pour debug admin.
  * Indenté pour être lisible. Préfixe vide = racine du container.

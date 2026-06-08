@@ -53,6 +53,9 @@ class ClassificationPipeline:
 
         clients = await self._cosmos.list_clients()
 
+        # Récupère l'arborescence existante pour la passer au LLM
+        storage_tree = await self._blob.list_storage_tree()
+
         # Fast path : facture + nom destinataire matche un seul client
         fast = _try_fast_path(extraction, clients)
         if fast is not None:
@@ -62,6 +65,7 @@ class ClassificationPipeline:
             classification = await self._llm.classify(
                 ocr_text=extraction.text,
                 clients_list=_render_clients(clients),
+                storage_tree=storage_tree,
             )
             log.info(
                 "llm_classified",
@@ -71,14 +75,40 @@ class ClassificationPipeline:
             )
 
         decision = self._decide(classification)
+
+        # Auto-création client : si l'IA a détecté un destinataire mais qu'il n'est pas
+        # dans la liste, on crée un client `auto-<slug>` à la volée pour pouvoir ranger
+        # le doc sous son arborescence. L'admin pourra plus tard fusionner avec un client manuel.
+        if (
+            classification.client_id is None
+            and classification.detected_recipient_name
+            and classification.detected_recipient_name.strip()
+        ):
+            auto_id = _slugify_client_id(classification.detected_recipient_name)
+            if auto_id:
+                await self._cosmos.ensure_auto_client(
+                    client_id=auto_id,
+                    display_name=classification.detected_recipient_name.strip(),
+                )
+                classification.client_id = auto_id
+                log.info("auto_created_client", client_id=auto_id, name=classification.detected_recipient_name)
+                # Re-décider : un client identifié peut faire passer en AUTO_FILE
+                # (mais on garde la confidence telle quelle pour le seuil).
+                decision = self._decide(classification)
+
         target_path = _build_target_path(
             current_blob_name=message.blob_name,
-            decision=decision,
             classification=classification,
         )
 
-        if decision == Decision.AUTO_FILE and target_path != message.blob_name:
-            await self._blob.move_blob(message.blob_name, target_path)
+        # Toujours ranger le blob sous le dossier client si le client est identifié,
+        # même si needs_review. Le flag needs_review est dans Cosmos pour l'admin.
+        if classification.client_id is not None and target_path != message.blob_name:
+            try:
+                await self._blob.move_blob(message.blob_name, target_path)
+            except Exception:
+                log.warning("move_blob_failed_keeping_inbox", blob=message.blob_name, exc_info=True)
+                target_path = message.blob_name  # fallback : reste dans _inbox
 
         duration_ms = int((time.perf_counter() - started) * 1000)
         cost = _estimate_cost(extraction, ocr_chars=len(extraction.text))
@@ -155,8 +185,10 @@ def _try_fast_path(
     year = datetime.now(timezone.utc).strftime("%Y")
     return ClassificationOutput(
         client_id=matches[0].id,
+        detected_recipient_name=extraction.invoice_customer_name,
         category=DocumentCategory.FACTURES,
         sub_category=year,
+        target_folder=f"factures/{year}",
         confidence=min(0.99, extraction.invoice_confidence or 0.95),
         reasoning="Fast-path : prebuilt-invoice a identifié un client unique.",
     )
@@ -169,23 +201,45 @@ def _normalize(s: str) -> str:
     )
 
 
+def _slugify_client_id(name: str) -> str:
+    """Transforme 'Jean Dupont' → 'auto-jean-dupont'. Ne garde que [a-z0-9-]."""
+    import re
+    slug = _normalize(name)
+    slug = re.sub(r"[^a-z0-9]+", "-", slug).strip("-")
+    slug = slug[:48]  # garde une marge sous la limite Cosmos
+    return f"auto-{slug}" if slug else ""
+
+
 def _is_year(s: str | None) -> bool:
     return s is not None and len(s) == 4 and s.isdigit() and 1900 <= int(s) <= 2100
 
 
 def _build_target_path(
-    *, current_blob_name: str, decision: Decision, classification: ClassificationOutput
+    *, current_blob_name: str, classification: ClassificationOutput
 ) -> str:
-    if decision == Decision.NEEDS_REVIEW or classification.client_id is None:
+    if classification.client_id is None:
         return current_blob_name  # reste dans _inbox/
     filename = current_blob_name.rsplit("/", 1)[-1]
-    parts = [
-        "clients",
-        classification.client_id,
-        classification.category.value,
-    ]
-    if classification.sub_category:
-        parts.append(classification.sub_category)
+    parts = ["clients", classification.client_id]
+
+    # Utilise target_folder du LLM s'il est renseigné (ex: "contrats/assurance")
+    if classification.target_folder:
+        folder = classification.target_folder.strip("/").strip()
+        # Sécurité : pas de path traversal
+        folder = "/".join(
+            seg for seg in folder.split("/") if seg and seg != ".." and seg != "."
+        )
+        if folder:
+            parts.extend(folder.split("/"))
+        else:
+            parts.append(classification.category.value)
+            if classification.sub_category:
+                parts.append(classification.sub_category)
+    else:
+        parts.append(classification.category.value)
+        if classification.sub_category:
+            parts.append(classification.sub_category)
+
     parts.append(filename)
     return "/".join(parts)
 

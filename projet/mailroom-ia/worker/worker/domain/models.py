@@ -40,10 +40,20 @@ class ClassificationOutput(BaseModel):
     """Sortie structurée du LLM Foundry (forme stricte JSON)."""
 
     client_id: str | None = Field(
-        default=None, description="ID du client matché, ou null si incertain"
+        default=None, description="ID du client matché, ou null si non présent dans la liste fournie"
+    )
+    detected_recipient_name: str | None = Field(
+        default=None,
+        max_length=200,
+        description="Nom Prénom (ou raison sociale) du destinataire détecté dans le document, même si pas dans la liste",
     )
     category: DocumentCategory
     sub_category: str | None = Field(default=None, max_length=64)
+    target_folder: str | None = Field(
+        default=None,
+        max_length=256,
+        description="Chemin relatif du dossier cible sous clients/<clientId>/, ex: 'contrats/assurance' ou 'factures/2026'. Utilise un dossier existant si pertinent, sinon propose un nouveau.",
+    )
     confidence: float = Field(ge=0.0, le=1.0)
     reasoning: str = Field(max_length=500)
 

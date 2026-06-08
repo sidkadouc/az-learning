@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from azure.cosmos.aio import CosmosClient
+from azure.cosmos.exceptions import CosmosResourceNotFoundError
 from azure.identity.aio import DefaultAzureCredential
 
 from worker.domain.models import ClientRecord, PipelineResult
@@ -36,6 +37,26 @@ class CosmosRepository:
             items.append(ClientRecord.model_validate(it))
         return items
 
+    async def get_client(self, client_id: str) -> ClientRecord | None:
+        try:
+            item = await self._clients.read_item(item=client_id, partition_key=client_id)
+        except CosmosResourceNotFoundError:
+            return None
+        return ClientRecord.model_validate(item)
+
+    async def ensure_auto_client(self, client_id: str, display_name: str) -> None:
+        """Crée le client s'il n'existe pas (idempotent). Tag `createdBy='ai-auto'`."""
+        existing = await self.get_client(client_id)
+        if existing is not None:
+            return
+        await self._clients.upsert_item({
+            "id": client_id,
+            "displayName": display_name,
+            "email": "",
+            "createdAt": datetime.now(timezone.utc).isoformat(),
+            "createdBy": "ai-auto",
+        })
+
     async def upsert_classification(
         self,
         doc_id: str,
@@ -62,6 +83,7 @@ class CosmosRepository:
                 "confidence": result.classification.confidence,
                 "needsReview": result.decision.value == "needs_review",
                 "reasoning": result.classification.reasoning,
+                "detectedRecipientName": result.classification.detected_recipient_name,
                 "diUsed": result.di_models_used,
                 "totalCostEur": result.total_cost_eur,
                 "durationMs": result.duration_ms,

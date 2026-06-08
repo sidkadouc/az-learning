@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Eye, RefreshCw, Trash2, UploadCloud, X } from "lucide-react";
 import type { ClientRecord, DocumentRecord } from "@/lib/types/domain";
@@ -273,11 +273,7 @@ function DetailPanel({
       </header>
 
       <div className="border-b">
-        <iframe
-          src={`/api/documents/${doc.id}/file`}
-          title="Aperçu"
-          className="h-[480px] w-full"
-        />
+        <DocPreview url={`/api/documents/${doc.id}/file`} docId={doc.id} />
         <div className="px-4 py-2 text-xs text-muted-foreground">
           Si l&rsquo;aperçu ne s&rsquo;affiche pas :{" "}
           <a className="underline" href={`/api/documents/${doc.id}/file`} target="_blank" rel="noreferrer">
@@ -291,6 +287,17 @@ function DetailPanel({
           Suggestion IA :{" "}
           <span className="text-foreground">{doc.category ?? "—"}{doc.subCategory ? ` / ${doc.subCategory}` : ""}</span>
           {" • confiance "}<span className="text-foreground">{(doc.classification.confidence * 100).toFixed(0)} %</span>
+          {doc.classification.detectedRecipientName && (
+            <div className="mt-1">
+              Destinataire détecté :{" "}
+              <span className="font-medium text-foreground">{doc.classification.detectedRecipientName}</span>
+              {!doc.clientId || doc.clientId === "_unassigned" ? (
+                <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] uppercase text-amber-800">
+                  non matché en base
+                </span>
+              ) : null}
+            </div>
+          )}
           {doc.classification.reasoning && (
             <p className="mt-1 italic">{doc.classification.reasoning}</p>
           )}
@@ -360,4 +367,37 @@ function DetailPanel({
       </div>
     </div>
   );
+}
+
+/** Fetch blob via API (carries auth cookie) then display via Object URL. */
+function DocPreview({ url, docId }: { url: string; docId: string }) {
+  const [objectUrl, setObjectUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    let revoke: string | null = null;
+    setObjectUrl(null);
+
+    fetch(url, { credentials: "include" })
+      .then(async (res) => {
+        if (!res.ok) return;
+        const blob = await res.blob();
+        const u = URL.createObjectURL(blob);
+        revoke = u;
+        setObjectUrl(u);
+      })
+      .catch(() => undefined);
+
+    return () => {
+      if (revoke) URL.revokeObjectURL(revoke);
+    };
+  }, [url, docId]);
+
+  if (!objectUrl) {
+    return (
+      <div className="flex h-[480px] items-center justify-center text-sm text-muted-foreground">
+        Chargement de l&rsquo;aperçu…
+      </div>
+    );
+  }
+  return <iframe src={objectUrl} title="Aperçu" className="h-[480px] w-full" />;
 }
