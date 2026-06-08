@@ -26,16 +26,66 @@ export async function uploadInboxBlob(
 
 /**
  * Renvoie une arborescence textuelle façon `tree` pour debug admin.
- * À remplacer par un vrai composant explorateur côté UI quand on aura besoin.
+ * Indenté pour être lisible. Préfixe vide = racine du container.
  */
 export async function listBlobsAsTree(prefix: string): Promise<string> {
   const cli = container();
-  const paths = new Set<string>();
+  const paths: { name: string; size: number; modified?: Date }[] = [];
   for await (const blob of cli.listBlobsFlat({ prefix })) {
-    paths.add(blob.name);
+    paths.push({
+      name: blob.name,
+      size: blob.properties.contentLength ?? 0,
+      modified: blob.properties.lastModified,
+    });
   }
-  if (paths.size === 0) return `${prefix} (vide)`;
-  return Array.from(paths).sort().join("\n");
+  if (paths.length === 0) return `${prefix || "/"} (vide)`;
+  paths.sort((a, b) => a.name.localeCompare(b.name));
+  return paths
+    .map((p) => {
+      const kb = (p.size / 1024).toFixed(1);
+      const when = p.modified ? p.modified.toISOString().slice(0, 19).replace("T", " ") : "";
+      return `${p.name}  (${kb} KB, ${when})`;
+    })
+    .join("\n");
+}
+
+export async function downloadBlobBuffer(blobName: string): Promise<{ data: Buffer; contentType: string }> {
+  const blob = container().getBlobClient(blobName);
+  const dl = await blob.download();
+  const props = await blob.getProperties();
+  const data = await streamToBuffer(dl.readableStreamBody as NodeJS.ReadableStream);
+  return { data, contentType: props.contentType ?? "application/octet-stream" };
+}
+
+async function streamToBuffer(readable: NodeJS.ReadableStream): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of readable) {
+    chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : (chunk as Buffer));
+  }
+  return Buffer.concat(chunks);
+}
+
+/**
+ * Déplace un blob (copy + delete). Le copy server-side ne supporte que les blobs
+ * accessibles via URL publique ou avec SAS — ici on télécharge puis re-upload (POC).
+ */
+export async function moveBlob(sourceName: string, destinationName: string): Promise<void> {
+  if (sourceName === destinationName) return;
+  const cli = container();
+  const src = cli.getBlobClient(sourceName);
+  const dl = await src.download();
+  const props = await src.getProperties();
+  const buf = await streamToBuffer(dl.readableStreamBody as NodeJS.ReadableStream);
+  const dst = cli.getBlockBlobClient(destinationName);
+  await dst.uploadData(buf, {
+    blobHTTPHeaders: { blobContentType: props.contentType ?? "application/octet-stream" },
+    metadata: props.metadata,
+  });
+  await src.delete();
+}
+
+export async function deleteBlob(blobName: string): Promise<void> {
+  await container().getBlobClient(blobName).deleteIfExists();
 }
 
 let queueClient: ReturnType<QueueServiceClient["getQueueClient"]> | null = null;

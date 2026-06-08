@@ -1,13 +1,23 @@
-export default function AdminClientsPage() {
+import { listClients } from "@/lib/azure/cosmos";
+import { ClientsList } from "./clients-list";
+
+export const dynamic = "force-dynamic";
+
+export default async function AdminClientsPage() {
+  const clients = await listClients(200).catch((err) => {
+    console.error("listClients failed", err);
+    return [];
+  });
+
   return (
     <section className="space-y-4">
       <header>
         <h1 className="text-2xl font-bold tracking-tight">Clients</h1>
-        <p className="text-sm text-muted-foreground">CRUD clients — à implémenter.</p>
+        <p className="text-sm text-muted-foreground">
+          Liste des clients connus du système. Ajoute un client pour pouvoir lui assigner des documents depuis l&rsquo;inbox.
+        </p>
       </header>
-      <p className="rounded-lg border bg-card p-6 text-sm text-muted-foreground">
-        Liste + formulaire d&rsquo;ajout : utiliser <code>GET /api/clients</code> et <code>POST /api/clients</code> (à brancher).
-      </p>
+      <ClientsList initial={clients} />
     </section>
   );
 }
